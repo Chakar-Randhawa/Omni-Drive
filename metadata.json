@@ -1,0 +1,6 @@
+{
+  "name": "OmniDrive Tools",
+  "description": "High-performance, client-side, privacy-first web utility suite featuring 105+ tools for PDF, images, audio, video, developer security, text, and financial calculations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

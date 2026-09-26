@@ -1,0 +1,3 @@
+# OmniDrive Tools — Google AdSense Authorized Digital Sellers
+# To configure for production deployment, replace with your authorized AdSense publisher ID:
+# google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0
