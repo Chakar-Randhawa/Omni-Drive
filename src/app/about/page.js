@@ -21,7 +21,7 @@ export default function AboutPage() {
           Most traditional file conversion portals and utilities require users to upload sensitive personal documents, contracts, identification photos, or proprietary spreadsheets to remote third-party servers. In many cases, users have no visibility into how long those files are retained, who has access to them, or whether they are backed up on insecure remote disks.
         </p>
         <p>
-          OmniDrive Tools was designed from the ground up on modern browser computing primitives. By leveraging client-side WebAssembly, standard Canvas pipelines, the HTML5 Web Audio framework, and the Web Crypto API, operations that once required large server farms can now execute instantly and securely directly inside your device's memory.
+          OmniDrive Tools was designed from the ground up on modern browser computing primitives. By leveraging client-side WebAssembly, standard Canvas pipelines, the HTML5 Web Audio framework, and the Web Crypto API, operations that once required large server farms can now execute instantly and securely directly inside your device&apos;s memory.
         </p>
 
         <h2 className="text-xl font-bold text-[#111827] pt-4">Core Principles</h2>

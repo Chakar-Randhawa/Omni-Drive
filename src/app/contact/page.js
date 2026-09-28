@@ -31,7 +31,7 @@ export default function ContactPage() {
         <div className="p-4 rounded-2xl bg-[#F7F8FC] border border-[#EEF0F4] text-xs sm:text-sm text-[#4B5563] space-y-2">
           <p className="font-semibold text-[#111827]">Direct Email Client Support</p>
           <p>
-            Because OmniDrive Tools operates with zero backend servers, messages submitted below launch your device's native email client to send inquiries directly without intermediary database logging.
+            Because OmniDrive Tools operates with zero backend servers, messages submitted below launch your device&apos;s native email client to send inquiries directly without intermediary database logging.
           </p>
         </div>
 
