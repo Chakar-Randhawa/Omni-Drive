@@ -134,7 +134,7 @@ export const ImageWorkspace = ({ tool }) => {
           outputBlob = imageEngine.generateBarcode(barcodeText);
           break;
         case 'img-favicon-generator':
-          outputBlob = await imageEngine.generateFavicon(file, 32);
+          outputBlob = await imageEngine.generateFavicon(file);
           break;
         case 'img-meme-generator':
           outputBlob = await imageEngine.generateMeme(file, { topText: memeTop, bottomText: memeBottom });
@@ -187,6 +187,10 @@ export const ImageWorkspace = ({ tool }) => {
     let ext = tool.output === 'image' ? (resultBlob.type.includes('png') ? 'png' : 'jpg') : tool.output;
     if (ext === 'palette') ext = 'json';
     if (ext === 'data') ext = 'json';
+    // Use the container the browser actually recorded (mp4 or webm), so the
+    // extension always matches the real file contents.
+    if (resultBlob.type === 'video/webm') ext = 'webm';
+    if (resultBlob.type === 'video/mp4') ext = 'mp4';
     a.download = `omnidrive-${tool.id}.${ext}`;
     document.body.appendChild(a);
     a.click();

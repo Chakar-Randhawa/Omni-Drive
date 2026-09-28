@@ -1,14 +1,18 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { CATEGORIES } from '../config/registry';
 
 export const Footer = ({ onNavigate }) => {
+  const router = useRouter();
   const handleNav = (path) => {
     if (onNavigate) {
       onNavigate(path);
-    } else {
+    } else if (path.includes('#')) {
       window.location.href = path;
+    } else {
+      router.push(path);
     }
   };
 

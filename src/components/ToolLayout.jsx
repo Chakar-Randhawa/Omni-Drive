@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Icon } from './Icons';
 import { AdSenseSlot } from './AdSenseSlot';
 import { CATEGORIES, TOOLS } from '../config/registry';
@@ -13,6 +15,7 @@ export const ToolLayout = ({
   relatedToolIds = [],
   onNavigate
 }) => {
+  const router = useRouter();
   const [openFaqIndex, setOpenFaqIndex] = useState(null);
 
   const category = CATEGORIES.find(c => c.id === tool.category) || {
@@ -31,9 +34,13 @@ export const ToolLayout = ({
   };
 
   const handleNav = (e, path) => {
+    e.preventDefault();
     if (onNavigate) {
-      e.preventDefault();
       onNavigate(path);
+    } else if (path.includes('#')) {
+      window.location.href = path;
+    } else {
+      router.push(path);
     }
   };
 
@@ -42,13 +49,13 @@ export const ToolLayout = ({
       {/* Top Breadcrumbs */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 pb-2">
         <nav className="flex items-center text-xs font-medium text-[#6B7280] space-x-2">
-          <a
+          <Link
             href="/"
             onClick={(e) => handleNav(e, '/')}
             className="hover:text-[#5B5BD6] cursor-pointer"
           >
             Home
-          </a>
+          </Link>
           <span>/</span>
           <a
             href={`/#${tool.category}`}
@@ -110,7 +117,7 @@ export const ToolLayout = ({
             {educationalContent || (
               <>
                 <p>
-                  The OmniDrive <strong>{tool.name}</strong> operates completely inside your client web browser. Utilizing modern WebAssembly, Canvas rendering pipelines, and the browser's native memory architecture, your files never leave your device.
+                  The OmniDrive <strong>{tool.name}</strong> operates completely inside your client web browser. Utilizing modern Canvas rendering pipelines and the browser&apos;s native memory architecture (with WebAssembly for select tools), your files never leave your device.
                 </p>
                 <h3 className="text-base font-semibold text-[#111827] pt-2">Why Client-Side Privacy Matters</h3>
                 <p>

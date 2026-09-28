@@ -134,76 +134,88 @@ export const imageEngine = {
 
   // Trace bitmap to SVG vector paths
   async traceToSVG(file) {
+    // Real colour vector tracing (bezier/line paths) via imagetracerjs,
+    // instead of one <rect> per dark pixel block.
     const img = await this.loadImage(file);
     const canvas = document.createElement('canvas');
-    const maxDim = 320;
+    const maxDim = 800;
     const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-    canvas.width = Math.round(img.width * scale);
-    canvas.height = Math.round(img.height * scale);
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
     const ctx = canvas.getContext('2d');
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
     const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imgData.data;
-    const rects = [];
 
-    // Simple luminance vectorizer
-    for (let y = 0; y < canvas.height; y += 3) {
-      for (let x = 0; x < canvas.width; x += 3) {
-        const idx = (y * canvas.width + x) * 4;
-        const r = data[idx];
-        const g = data[idx + 1];
-        const b = data[idx + 2];
-        const a = data[idx + 3];
-        if (a > 50 && (r + g + b) / 3 < 180) {
-          rects.push(`<rect x="${x}" y="${y}" width="3" height="3" fill="rgb(${r},${g},${b})" />`);
-        }
-      }
-    }
-
-    const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${canvas.width} ${canvas.height}" width="${canvas.width}" height="${canvas.height}">
-  ${rects.join('\n  ')}
-</svg>`;
-
+    const mod = await import('imagetracerjs');
+    const ImageTracer = mod.default || mod;
+    const svg = ImageTracer.imagedataToSVG(imgData, {
+      numberofcolors: 16,
+      ltres: 1,
+      qtres: 1,
+      pathomit: 8,
+      colorsampling: 2,
+      blurradius: 0,
+      scale: 1,
+      viewbox: true,
+    });
     return new Blob([svg], { type: 'image/svg+xml' });
   },
-
-  // Background Remover (chroma / color keying and alpha thresholding)
-  async removeBackground(file, tolerance = 30) {
+  // Background removal by flood-filling inward from the image border.
+  // Works well on solid / uniform / lightly-graded backgrounds. It is NOT an
+  // AI segmentation model, so busy photographic backgrounds won't cut cleanly.
+  async removeBackground(file, tolerance = 40) {
     const img = await this.loadImage(file);
     const canvas = document.createElement('canvas');
-    canvas.width = img.width;
-    canvas.height = img.height;
+    const w = canvas.width = img.width;
+    const h = canvas.height = img.height;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(img, 0, 0);
-
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const imgData = ctx.getImageData(0, 0, w, h);
     const d = imgData.data;
 
-    // Sample top-left pixel as background color
-    const bgR = d[0];
-    const bgG = d[1];
-    const bgB = d[2];
+    const dist = (i, r, g, b) => Math.sqrt((d[i] - r) ** 2 + (d[i + 1] - g) ** 2 + (d[i + 2] - b) ** 2);
+    // Reference colours: the four corners (handles different-coloured corners)
+    const corners = [0, (w - 1) * 4, (h - 1) * w * 4, ((h - 1) * w + (w - 1)) * 4].map(i => [d[i], d[i + 1], d[i + 2]]);
+    const isBgSeed = (i) => corners.some(([r, g, b]) => dist(i, r, g, b) < tolerance);
 
-    for (let i = 0; i < d.length; i += 4) {
-      const diff = Math.sqrt(
-        Math.pow(d[i] - bgR, 2) +
-        Math.pow(d[i + 1] - bgG, 2) +
-        Math.pow(d[i + 2] - bgB, 2)
-      );
-      if (diff < tolerance) {
-        d[i + 3] = 0; // Transparent
+    const visited = new Uint8Array(w * h);
+    const stack = [];
+    const push = (x, y) => {
+      const p = y * w + x;
+      if (visited[p]) return;
+      const i = p * 4;
+      if (d[i + 3] === 0 || isBgSeed(i)) { visited[p] = 1; stack.push(p); }
+    };
+    for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); }
+    for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
+
+    while (stack.length) {
+      const p = stack.pop();
+      const x = p % w, y = (p - x) / w;
+      if (x > 0) push(x - 1, y);
+      if (x < w - 1) push(x + 1, y);
+      if (y > 0) push(x, y - 1);
+      if (y < h - 1) push(x, y + 1);
+    }
+
+    for (let p = 0; p < w * h; p++) if (visited[p]) d[p * 4 + 3] = 0;
+
+    // Soften the cut edge: pixels touching the removed area get partial alpha
+    const alphaCopy = new Uint8ClampedArray(w * h);
+    for (let p = 0; p < w * h; p++) alphaCopy[p] = d[p * 4 + 3];
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const p = y * w + x;
+        if (alphaCopy[p] === 0) continue;
+        const touching = alphaCopy[p - 1] === 0 || alphaCopy[p + 1] === 0 || alphaCopy[p - w] === 0 || alphaCopy[p + w] === 0;
+        if (touching) d[p * 4 + 3] = 170;
       }
     }
 
     ctx.putImageData(imgData, 0, 0);
-    return new Promise((resolve) => {
-      canvas.toBlob((blob) => resolve(blob), 'image/png');
-    });
+    return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), 'image/png'));
   },
 
-  // Color Palette Extractor
   async extractPalette(file, count = 6) {
     const img = await this.loadImage(file);
     const canvas = document.createElement('canvas');
@@ -285,20 +297,24 @@ export const imageEngine = {
     const ctx = canvas.getContext('2d');
     ctx.drawImage(img, 0, 0);
 
-    // Use native browser BarcodeDetector API if available
-    if (window.BarcodeDetector) {
+    // 1) Native BarcodeDetector where available (Chrome/Edge)
+    if (typeof window !== 'undefined' && window.BarcodeDetector) {
       try {
         const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
         const codes = await detector.detect(canvas);
-        if (codes && codes.length > 0) {
-          return codes[0].rawValue;
-        }
+        if (codes && codes.length > 0) return codes[0].rawValue;
       } catch {
-        // Fallback
+        // fall through to the pure-JS decoder
       }
     }
 
-    return 'QR Code Decoded: URL or plain content found in image frame.';
+    // 2) Cross-browser pure-JS decoder (Safari, Firefox, etc.)
+    const jsQR = (await import('jsqr')).default;
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const result = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' });
+    if (result && result.data) return result.data;
+
+    throw new Error('No QR code could be detected in this image. Try a sharper, higher-contrast picture with the whole code visible.');
   },
 
   // Barcode Generator
@@ -348,103 +364,206 @@ export const imageEngine = {
   },
 
   // Favicon Generator (produces 32x32 standard PNG icon)
-  async generateFavicon(file, size = 32) {
+  // Generates a real favicon pack as a ZIP: PNGs at standard sizes plus a
+  // multi-size favicon.ico (PNG-encoded entries).
+  async generateFavicon(file) {
     const img = await this.loadImage(file);
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0, size, size);
-
-    return new Promise((resolve) => {
-      canvas.toBlob((blob) => resolve(blob), 'image/png');
+    const sizes = [16, 32, 48, 64, 180, 192, 512];
+    const renderPng = (size) => new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      // Cover-fit: crop to a centred square so non-square logos aren't stretched
+      const side = Math.min(img.width, img.height);
+      const sx = (img.width - side) / 2;
+      const sy = (img.height - side) / 2;
+      ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+      canvas.toBlob(async (blob) => resolve(new Uint8Array(await blob.arrayBuffer())), 'image/png');
     });
+
+    const pngs = {};
+    for (const size of sizes) pngs[size] = await renderPng(size);
+
+    // Build favicon.ico containing 16/32/48 PNG entries
+    const icoSizes = [16, 32, 48];
+    const headerSize = 6 + icoSizes.length * 16;
+    const total = headerSize + icoSizes.reduce((n, sz) => n + pngs[sz].length, 0);
+    const ico = new Uint8Array(total);
+    const view = new DataView(ico.buffer);
+    view.setUint16(0, 0, true);
+    view.setUint16(2, 1, true);
+    view.setUint16(4, icoSizes.length, true);
+    let offset = headerSize;
+    icoSizes.forEach((sz, idx) => {
+      const base = 6 + idx * 16;
+      ico[base] = sz;
+      ico[base + 1] = sz;
+      ico[base + 2] = 0;
+      ico[base + 3] = 0;
+      view.setUint16(base + 4, 1, true);
+      view.setUint16(base + 6, 32, true);
+      view.setUint32(base + 8, pngs[sz].length, true);
+      view.setUint32(base + 12, offset, true);
+      ico.set(pngs[sz], offset);
+      offset += pngs[sz].length;
+    });
+
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+    zip.file('favicon.ico', ico);
+    zip.file('favicon-16x16.png', pngs[16]);
+    zip.file('favicon-32x32.png', pngs[32]);
+    zip.file('favicon-48x48.png', pngs[48]);
+    zip.file('favicon-64x64.png', pngs[64]);
+    zip.file('apple-touch-icon.png', pngs[180]);
+    zip.file('android-chrome-192x192.png', pngs[192]);
+    zip.file('android-chrome-512x512.png', pngs[512]);
+    zip.file('README.txt', 'Add to <head>:\n<link rel="icon" href="/favicon.ico" sizes="any">\n<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">\n<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n');
+    return await zip.generateAsync({ type: 'blob' });
   },
 
   // OCR Text Extraction (using Tesseract.js if available or canvas pixel density)
   async extractOCRText(file) {
+    let worker;
     try {
       const { createWorker } = await import('tesseract.js');
-      const worker = await createWorker('eng');
+      worker = await createWorker('eng');
       const ret = await worker.recognize(file);
-      await worker.terminate();
-      return ret.data.text || 'No text detected in the provided image.';
-    } catch {
-      return 'OCR Extracted Text: Client analysis complete. (For full OCR multi-language model, ensure network access).';
+      const text = (ret.data.text || '').trim();
+      return text || 'No text detected in the provided image.';
+    } catch (err) {
+      throw new Error('OCR could not run. The OCR engine downloads its language data on first use, so please check your internet connection and try again.');
+    } finally {
+      if (worker) { try { await worker.terminate(); } catch { /* ignore */ } }
     }
   },
 
-  // GIF to MP4 / Video
+  // Picks a video container this browser can genuinely record
+  pickVideoMime() {
+    const candidates = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+    if (typeof MediaRecorder === 'undefined') return null;
+    return candidates.find(m => MediaRecorder.isTypeSupported(m)) || null;
+  },
+
+  // GIF to video — decodes real GIF frames (with their delays) and records them
   async gifToMp4(file) {
-    const img = await this.loadImage(file);
-    const canvas = document.createElement('canvas');
-    canvas.width = img.width;
-    canvas.height = img.height;
-    const ctx = canvas.getContext('2d');
+    const mimeType = this.pickVideoMime();
+    if (!mimeType) throw new Error('This browser cannot record video (MediaRecorder unsupported). Try Chrome, Edge, or Firefox.');
+    const { parseGIF, decompressFrames } = await import('gifuct-js');
+    const gif = parseGIF(await file.arrayBuffer());
+    const frames = decompressFrames(gif, true);
+    if (!frames.length) throw new Error('No frames could be read from this GIF.');
+    const width = gif.lsd.width, height = gif.lsd.height;
 
-    const stream = canvas.captureStream(25);
-    const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    const patch = document.createElement('canvas');
+    const pctx = patch.getContext('2d');
+
+    const stream = canvas.captureStream(30);
+    const recorder = new MediaRecorder(stream, { mimeType });
     const chunks = [];
-    mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+    recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((resolve) => {
+      recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType.split(';')[0] }));
+    });
 
-    mediaRecorder.start();
-    for (let i = 0; i < 25; i++) {
-      ctx.drawImage(img, 0, 0);
-      await new Promise(r => setTimeout(r, 40));
+    recorder.start();
+    for (const frame of frames) {
+      const { left, top, width: fw, height: fh } = frame.dims;
+      if (frame.disposalType === 2) ctx.clearRect(0, 0, width, height);
+      patch.width = fw;
+      patch.height = fh;
+      pctx.putImageData(new ImageData(new Uint8ClampedArray(frame.patch), fw, fh), 0, 0);
+      ctx.drawImage(patch, left, top);
+      await new Promise(r => setTimeout(r, Math.max(20, frame.delay || 40)));
     }
-    mediaRecorder.stop();
-
-    return await new Promise((resolve) => {
-      mediaRecorder.onstop = () => {
-        resolve(new Blob(chunks, { type: 'video/mp4' }));
-      };
-    });
+    await new Promise(r => setTimeout(r, 100));
+    recorder.stop();
+    return await done;
   },
 
-  // MP4 to GIF
-  async mp4ToGif(file) {
-    const video = document.createElement('video');
-    video.src = URL.createObjectURL(file);
-    video.muted = true;
-    await new Promise((r) => { video.onloadeddata = r; });
-    video.play();
+  // Video to real animated GIF (frames sampled via seeking, encoded with gifenc)
+  async mp4ToGif(file, { fps = 10, maxSeconds = 10, maxWidth = 480 } = {}) {
+    const url = URL.createObjectURL(file);
+    try {
+      const video = document.createElement('video');
+      video.src = url;
+      video.muted = true;
+      video.playsInline = true;
+      await new Promise((resolve, reject) => {
+        video.onloadeddata = resolve;
+        video.onerror = () => reject(new Error('This video format could not be read by your browser.'));
+      });
 
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.min(480, video.videoWidth);
-    canvas.height = Math.round((canvas.width * video.videoHeight) / video.videoWidth);
-    const ctx = canvas.getContext('2d');
+      const width = Math.min(maxWidth, video.videoWidth);
+      const height = Math.round((width * video.videoHeight) / video.videoWidth);
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    URL.revokeObjectURL(video.src);
+      const { GIFEncoder, quantize, applyPalette } = await import('gifenc');
+      const gif = GIFEncoder();
+      const duration = Math.min(video.duration || maxSeconds, maxSeconds);
+      const step = 1 / fps;
+      const delay = Math.round(1000 / fps);
 
-    return new Promise((resolve) => {
-      canvas.toBlob((blob) => resolve(blob), 'image/gif');
-    });
+      for (let t = 0; t < duration; t += step) {
+        await new Promise((resolve) => {
+          video.onseeked = resolve;
+          video.currentTime = t;
+        });
+        ctx.drawImage(video, 0, 0, width, height);
+        const { data } = ctx.getImageData(0, 0, width, height);
+        const palette = quantize(data, 256);
+        const index = applyPalette(data, palette);
+        gif.writeFrame(index, width, height, { palette, delay });
+      }
+      gif.finish();
+      return new Blob([gif.bytes()], { type: 'image/gif' });
+    } finally {
+      URL.revokeObjectURL(url);
+    }
   },
 
-  // Read EXIF Metadata
+  // Read EXIF Metadata — real parsing via exifr (camera, lens, exposure, GPS, dates...)
   async readEXIF(file) {
-    const buffer = await file.arrayBuffer();
-    const view = new DataView(buffer);
-    
     const info = {
       FileName: file.name,
       FileSize: `${(file.size / 1024).toFixed(1)} KB`,
-      MimeType: file.type,
+      MimeType: file.type || 'unknown',
       LastModified: new Date(file.lastModified).toLocaleString(),
-      ColorSpace: 'sRGB',
-      Orientation: 'Horizontal (Normal)',
-      CameraMake: 'N/A (Stripped / Web Graphic)',
-      CameraModel: 'Standard Digital Render',
-      FocalLength: '35mm equivalent',
-      Exposure: '1/125s f/2.8 ISO 100'
     };
-
-    // Check JPEG SOI
-    if (view.getUint16(0, false) === 0xFFD8) {
-      info.Format = 'JPEG / JFIF';
+    const exifr = (await import('exifr')).default;
+    let tags = null;
+    try {
+      tags = await exifr.parse(file, { tiff: true, exif: true, gps: true, ifd1: false, xmp: false, translateValues: true, reviveValues: true });
+    } catch {
+      tags = null;
     }
-
+    if (!tags || Object.keys(tags).length === 0) {
+      info.Note = 'No EXIF metadata found in this image (it may be a PNG/WebP/screenshot, or the metadata was stripped).';
+      return info;
+    }
+    const fmt = (v) => {
+      if (v instanceof Date) return v.toLocaleString();
+      if (typeof v === 'number') return Number.isInteger(v) ? v : Number(v.toFixed(4));
+      if (Array.isArray(v)) return v.join(', ');
+      if (v && typeof v === 'object') return JSON.stringify(v);
+      return v;
+    };
+    const wanted = ['Make', 'Model', 'LensModel', 'Software', 'DateTimeOriginal', 'CreateDate', 'ModifyDate', 'ExposureTime', 'FNumber', 'ISO', 'FocalLength', 'FocalLengthIn35mmFormat', 'Flash', 'WhiteBalance', 'ExposureProgram', 'MeteringMode', 'Orientation', 'ColorSpace', 'ExifImageWidth', 'ExifImageHeight', 'XResolution', 'YResolution', 'latitude', 'longitude', 'GPSAltitude'];
+    for (const key of wanted) {
+      if (tags[key] !== undefined && tags[key] !== null && tags[key] !== '') info[key] = fmt(tags[key]);
+    }
+    if (info.latitude !== undefined && info.longitude !== undefined) {
+      info.GPSMapLink = `https://www.google.com/maps?q=${info.latitude},${info.longitude}`;
+    }
     return info;
   }
 };

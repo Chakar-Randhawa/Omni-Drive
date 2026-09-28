@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Icon } from './Icons';
 import { useSearch } from '../context/SearchContext';
 import { CATEGORIES } from '../config/registry';
 
 export const Navbar = ({ currentPath = '/', onNavigate }) => {
+  const router = useRouter();
   const { searchQuery, setSearchQuery, searchResults, isSearchOpen, setIsSearchOpen } = useSearch();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -32,8 +34,12 @@ export const Navbar = ({ currentPath = '/', onNavigate }) => {
     setMobileMenuOpen(false);
     if (onNavigate) {
       onNavigate(path);
-    } else {
+    } else if (path.includes('#')) {
+      // Hash links (category anchors) need a real navigation since the
+      // target section lives on a different page than the current one.
       window.location.href = path;
+    } else {
+      router.push(path);
     }
   };
 

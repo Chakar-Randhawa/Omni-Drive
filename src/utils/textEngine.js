@@ -75,7 +75,7 @@ export const textEngine = {
       for (let i = 0; i < len; i++) {
         s.push(loremWords[Math.floor(Math.random() * loremWords.length)]);
       }
-      return s[0].charAt(0).toUpperCase() + s.slice(1).join(' ') + '.';
+      return s[0].charAt(0).toUpperCase() + s[0].slice(1) + (s.length > 1 ? ' ' + s.slice(1).join(' ') : '') + '.';
     };
 
     if (type === 'words') {

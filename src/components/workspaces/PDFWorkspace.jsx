@@ -21,7 +21,7 @@ export const PDFWorkspace = ({ tool }) => {
   const [removePagesStr, setRemovePagesStr] = useState('1');
   const [cropMargin, setCropMargin] = useState(10);
   const [pageNumberFormat, setPageNumberFormat] = useState('Page {n} of {total}');
-  const [pdfPassword, setPdfPassword] = useState('MySecurePassword123');
+  const [pdfPassword, setPdfPassword] = useState('');
   const [extractedText, setExtractedText] = useState('');
   const [htmlInput, setHtmlInput] = useState('<h1>Meeting Summary</h1><p>Processed securely in your browser with zero remote transmission.</p>');
 
@@ -209,7 +209,11 @@ export const PDFWorkspace = ({ tool }) => {
     
     // Choose appropriate file extension
     let ext = tool.output;
-    if (ext === 'images') ext = 'jpg';
+    if (ext === 'images') ext = resultBlob.type === 'image/png' ? 'png' : 'jpg';
+    // Multi-page renders (pdf-to-jpg/png/webp) come back as a zip archive
+    // when the source PDF has more than one page — use .zip in that case
+    // instead of claiming a single-image extension for an archive.
+    if (resultBlob.type === 'application/zip') ext = 'zip';
     a.download = `omnidrive-${tool.id}.${ext}`;
     document.body.appendChild(a);
     a.click();

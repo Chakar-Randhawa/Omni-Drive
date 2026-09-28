@@ -25,6 +25,7 @@ export const MediaWorkspace = ({ tool }) => {
   const [mp3Title, setMp3Title] = useState('My Track');
   const [mp3Artist, setMp3Artist] = useState('Studio Producer');
   const [videoResolution, setVideoResolution] = useState('720p');
+  const [audioTargetFormat, setAudioTargetFormat] = useState('wav');
   const [subtitles, setSubtitles] = useState([
     { start: '00:00:01,000', end: '00:00:04,000', text: 'Welcome to OmniDrive Tools.' },
     { start: '00:00:04,500', end: '00:00:08,000', text: '100% Client-Side Processing.' }
@@ -131,7 +132,7 @@ export const MediaWorkspace = ({ tool }) => {
           outputBlob = await ffmpegEngine.trimAudio(file, trimStart, trimEnd, setProgressMsg);
           break;
         case 'av-video-cutter-trimmer':
-          outputBlob = await ffmpegEngine.trimVideo(file, trimStart, 5, setProgressMsg);
+          outputBlob = await ffmpegEngine.trimVideo(file, trimStart, trimEnd, setProgressMsg);
           break;
         case 'av-audio-reverse-tool':
           outputBlob = await ffmpegEngine.reverseAudio(file, setProgressMsg);
@@ -151,13 +152,11 @@ export const MediaWorkspace = ({ tool }) => {
         case 'av-video-to-audio-mp3':
           outputBlob = await ffmpegEngine.videoToAudio(file, setProgressMsg);
           break;
-        case 'av-audio-format-converter': {
-          const { audioBuffer } = await ffmpegEngine.decodeAudio(file);
-          outputBlob = ffmpegEngine.audioBufferToWav(audioBuffer);
+        case 'av-audio-format-converter':
+          outputBlob = await ffmpegEngine.convertAudio(file, audioTargetFormat, setProgressMsg);
           break;
-        }
         case 'av-video-compressor':
-          outputBlob = await ffmpegEngine.resizeVideo(file, 640, 360, setProgressMsg);
+          outputBlob = await ffmpegEngine.resizeVideo(file, 640, 360, setProgressMsg, 800000);
           break;
         case 'av-video-resizer-dimensions': {
           const [w, h] = videoResolution === '1080p' ? [1920, 1080] : videoResolution === '1:1' ? [720, 720] : [1280, 720];
@@ -193,7 +192,14 @@ export const MediaWorkspace = ({ tool }) => {
     const url = URL.createObjectURL(resultBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `omnidrive-${tool.id}.${tool.output}`;
+    // Extension follows the real container that was produced
+    const t = resultBlob.type || '';
+    let ext = tool.output;
+    if (t.includes('webm')) ext = 'webm';
+    else if (t === 'video/mp4' || t === 'audio/mp4') ext = 'mp4';
+    else if (t === 'audio/wav') ext = 'wav';
+    else if (t === 'audio/mpeg') ext = 'mp3';
+    a.download = `omnidrive-${tool.id}.${ext}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -258,6 +264,33 @@ export const MediaWorkspace = ({ tool }) => {
             value={transcript || 'Click "Start Listening" and begin speaking into your microphone...'}
             className="w-full p-4 bg-white border border-[#E5E7EB] rounded-xl text-sm"
           />
+          {transcript && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => navigator.clipboard && navigator.clipboard.writeText(transcript)}
+                className="px-4 py-2 bg-white border border-[#E5E7EB] text-[#111827] rounded-xl text-xs font-bold cursor-pointer"
+              >
+                Copy Transcript
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const url = URL.createObjectURL(new Blob([transcript], { type: 'text/plain;charset=utf-8' }));
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'omnidrive-transcript.txt';
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  setTimeout(() => URL.revokeObjectURL(url), 1000);
+                }}
+                className="px-4 py-2 bg-[#111827] text-white rounded-xl text-xs font-bold cursor-pointer"
+              >
+                Download .txt
+              </button>
+            </div>
+          )}
         </div>
       ) : isSrtGenerator ? (
         <div className="p-6 rounded-2xl bg-[#F7F8FC] border border-[#EEF0F4] space-y-4">
@@ -320,6 +353,20 @@ export const MediaWorkspace = ({ tool }) => {
 
       {/* Tool-specific Controls */}
       <div className="space-y-4">
+        {tool.id === 'av-audio-format-converter' && (
+          <div className="p-6 bg-[#F7F8FC] border border-[#EEF0F4] rounded-2xl">
+            <label className="block text-xs font-bold uppercase text-[#111827] mb-1">Output Format</label>
+            <select
+              value={audioTargetFormat}
+              onChange={(e) => setAudioTargetFormat(e.target.value)}
+              className="w-full px-3.5 py-2 bg-white border border-[#E5E7EB] rounded-xl text-sm"
+            >
+              <option value="wav">WAV (lossless, all browsers)</option>
+              <option value="webm">WebM / Opus (Chrome, Edge, Firefox)</option>
+              <option value="mp4">M4A / AAC (Safari, recent Chrome)</option>
+            </select>
+          </div>
+        )}
         {(tool.id === 'av-audio-cutter-trimmer' || tool.id === 'av-video-cutter-trimmer') && (
           <div className="p-6 bg-[#F7F8FC] border border-[#EEF0F4] rounded-2xl grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>

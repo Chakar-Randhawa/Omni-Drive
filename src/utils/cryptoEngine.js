@@ -266,7 +266,8 @@ export const cryptoEngine = {
   // HTML Entity Encoder / Decoder
   htmlEntities(str, encode = true) {
     if (encode) {
-      return str.replace(/[\u00A0-\u9999<>&"']/g, (i) => `&#${i.charCodeAt(0)};`);
+      const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' };
+      return str.replace(/[<>&"']/g, (c) => map[c]);
     } else {
       const doc = new DOMParser().parseFromString(str, 'text/html');
       return doc.documentElement.textContent || '';

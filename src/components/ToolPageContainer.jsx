@@ -1,25 +1,27 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { ToolLayout } from './ToolLayout';
-import { PDFWorkspace } from './workspaces/PDFWorkspace';
-import { ImageWorkspace } from './workspaces/ImageWorkspace';
-import { MediaWorkspace } from './workspaces/MediaWorkspace';
-import { SecurityWorkspace } from './workspaces/SecurityWorkspace';
-import { TextWorkspace } from './workspaces/TextWorkspace';
-import { FinanceWorkspace } from './workspaces/FinanceWorkspace';
+const PDFWorkspace = dynamic(() => import('./workspaces/PDFWorkspace').then((m) => m.PDFWorkspace), { ssr: false, loading: () => <div className="p-8 text-center text-sm text-[#6B7280]">Loading tool...</div> });
+const ImageWorkspace = dynamic(() => import('./workspaces/ImageWorkspace').then((m) => m.ImageWorkspace), { ssr: false, loading: () => <div className="p-8 text-center text-sm text-[#6B7280]">Loading tool...</div> });
+const MediaWorkspace = dynamic(() => import('./workspaces/MediaWorkspace').then((m) => m.MediaWorkspace), { ssr: false, loading: () => <div className="p-8 text-center text-sm text-[#6B7280]">Loading tool...</div> });
+const SecurityWorkspace = dynamic(() => import('./workspaces/SecurityWorkspace').then((m) => m.SecurityWorkspace), { ssr: false, loading: () => <div className="p-8 text-center text-sm text-[#6B7280]">Loading tool...</div> });
+const TextWorkspace = dynamic(() => import('./workspaces/TextWorkspace').then((m) => m.TextWorkspace), { ssr: false, loading: () => <div className="p-8 text-center text-sm text-[#6B7280]">Loading tool...</div> });
+const FinanceWorkspace = dynamic(() => import('./workspaces/FinanceWorkspace').then((m) => m.FinanceWorkspace), { ssr: false, loading: () => <div className="p-8 text-center text-sm text-[#6B7280]">Loading tool...</div> });
 
 export const ToolPageContainer = ({ tool, onNavigate }) => {
   if (!tool) {
     return (
       <div className="text-center py-20">
         <h2 className="text-2xl font-bold text-[#111827]">Tool Not Found</h2>
-        <a
+        <Link
           href="/"
           className="mt-4 inline-block px-4 py-2 bg-[#5B5BD6] text-white rounded-xl text-sm"
         >
           Return to Dashboard
-        </a>
+        </Link>
       </div>
     );
   }
@@ -47,7 +49,7 @@ export const ToolPageContainer = ({ tool, onNavigate }) => {
     return [
       {
         q: `Are my files uploaded to a remote server when using ${tool.name}?`,
-        a: `No. OmniDrive Tools executes 100% of the ${tool.name} algorithm inside your local browser memory using modern WebAssembly, Canvas, and client-side JavaScript APIs. Your documents and data never leave your device.`
+        a: `No. OmniDrive Tools executes 100% of the ${tool.name} algorithm inside your local browser memory using modern Canvas, Web Crypto, and client-side JavaScript APIs (WebAssembly is used for select tools, such as OCR). Your documents and data never leave your device.`
       },
       {
         q: `Is there a file count or file size limit for ${tool.name}?`,
@@ -59,7 +61,7 @@ export const ToolPageContainer = ({ tool, onNavigate }) => {
       },
       {
         q: `Does ${tool.name} work on mobile devices?`,
-        a: `Yes. All OmniDrive utilities are fully responsive and engineered to work across modern desktop, tablet, and mobile browsers including Safari, Chrome, Edge, and Firefox.`
+        a: `Yes. OmniDrive's pages are fully responsive across modern desktop, tablet, and mobile browsers. Most tools work in Chrome, Edge, Firefox, and Safari; a few advanced tools (e.g. some video/audio and QR scanning features) rely on browser APIs with the broadest support in Chrome and Edge.`
       }
     ];
   };
