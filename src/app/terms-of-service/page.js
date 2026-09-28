@@ -16,7 +16,7 @@ export default function TermsOfServicePage() {
       <div className="bg-white border border-[#E5E7EB] rounded-3xl p-6 sm:p-10 space-y-6 shadow-xs text-sm sm:text-base text-[#4B5563] leading-relaxed">
         <h2 className="text-lg font-bold text-[#111827]">1. Acceptance of Terms</h2>
         <p>
-          By accessing and using OmniDrive Tools ("the Service"), you agree to be bound by these Terms of Service. If you do not agree to these terms, you should discontinue using the Service immediately.
+          By accessing and using OmniDrive Tools (&quot;the Service&quot;), you agree to be bound by these Terms of Service. If you do not agree to these terms, you should discontinue using the Service immediately.
         </p>
 
         <h2 className="text-lg font-bold text-[#111827]">2. Nature of the Service & User Content</h2>
@@ -36,7 +36,7 @@ export default function TermsOfServicePage() {
 
         <h2 className="text-lg font-bold text-[#111827]">5. Disclaimer of Warranties & Limitation of Liability</h2>
         <p>
-          The service is provided on an "as is" and "as available" basis without warranties of any kind, whether express or implied. Under no circumstances shall OmniDrive Tools or its contributors be liable for any direct, indirect, incidental, or consequential damages resulting from the use or inability to use the tools or resulting files.
+          The service is provided on an &quot;as is&quot; and &quot;as available&quot; basis without warranties of any kind, whether express or implied. Under no circumstances shall OmniDrive Tools or its contributors be liable for any direct, indirect, incidental, or consequential damages resulting from the use or inability to use the tools or resulting files.
         </p>
       </div>
     </div>

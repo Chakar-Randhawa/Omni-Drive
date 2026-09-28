@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Icon } from '../components/Icons';
 import { CATEGORIES, TOOLS } from '../config/registry';
 import { AdSenseSlot } from '../components/AdSenseSlot';
 
 export default function HomePage({ onNavigate }) {
+  const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchFilter, setSearchFilter] = useState('');
 
@@ -19,9 +21,11 @@ export default function HomePage({ onNavigate }) {
   });
 
   const handleToolClick = (e, path) => {
+    e.preventDefault();
     if (onNavigate) {
-      e.preventDefault();
       onNavigate(path);
+    } else {
+      router.push(path);
     }
   };
 
@@ -151,7 +155,7 @@ export default function HomePage({ onNavigate }) {
           <div className="text-center py-16 bg-white rounded-3xl border border-[#E5E7EB] p-8">
             <Icon name="search" className="w-10 h-10 text-[#9CA3AF] mx-auto mb-3" />
             <p className="text-base font-bold text-[#111827]">No matching tools found</p>
-            <p className="text-xs text-[#6B7280] mt-1">Try searching for keywords like "pdf", "image", "hash", or "calculator".</p>
+            <p className="text-xs text-[#6B7280] mt-1">Try searching for keywords like &quot;pdf&quot;, &quot;image&quot;, &quot;hash&quot;, or &quot;calculator&quot;.</p>
           </div>
         )}
       </section>

@@ -26,7 +26,7 @@ export default function PrivacyPolicyPage() {
 
         <h2 className="text-lg font-bold text-[#111827]">3. Advertising & Cookies</h2>
         <p>
-          To maintain OmniDrive Tools as a 100% free resource without requiring paid memberships, we may display non-intrusive advertisements served through third-party advertising partners, including Google AdSense. Third-party advertising vendors may use cookies, web beacons, or similar tracking mechanisms to serve advertisements based on a user's prior visits to this or other websites. You may manage cookie preferences via your web browser settings or through regional consent preference mechanisms.
+          To maintain OmniDrive Tools as a 100% free resource without requiring paid memberships, we may display non-intrusive advertisements served through third-party advertising partners, including Google AdSense. Third-party advertising vendors may use cookies, web beacons, or similar tracking mechanisms to serve advertisements based on a user&apos;s prior visits to this or other websites. You may manage cookie preferences via your web browser settings or through regional consent preference mechanisms.
         </p>
 
         <h2 className="text-lg font-bold text-[#111827]">4. Web Analytics</h2>
