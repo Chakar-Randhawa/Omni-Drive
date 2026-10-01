@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { imageEngine } from '../../utils/imageEngine';
+import { ffmpegEngine } from '../../utils/ffmpegEngine';
 import { FileDropZone } from '../FileDropZone';
 import { Icon } from '../Icons';
 
@@ -13,6 +14,7 @@ export const ImageWorkspace = ({ tool }) => {
   const [resultPreviewUrl, setResultPreviewUrl] = useState(null);
   const [resultStats, setResultStats] = useState(null);
   const [error, setError] = useState(null);
+  const [progressMsg, setProgressMsg] = useState('');
 
   // Tool specific configurations
   const [quality, setQuality] = useState(0.8);
@@ -61,6 +63,7 @@ export const ImageWorkspace = ({ tool }) => {
     }
     setProcessing(true);
     setError(null);
+    setProgressMsg('');
 
     try {
       let outputBlob = null;
@@ -152,10 +155,10 @@ export const ImageWorkspace = ({ tool }) => {
           outputBlob = await imageEngine.applyFilters(file, { blur: 12 });
           break;
         case 'img-gif-to-mp4':
-          outputBlob = await imageEngine.gifToMp4(file);
+          outputBlob = await ffmpegEngine.gifToMp4(file, setProgressMsg);
           break;
         case 'img-mp4-to-gif':
-          outputBlob = await imageEngine.mp4ToGif(file);
+          outputBlob = await ffmpegEngine.mp4ToGif(file, {}, setProgressMsg);
           break;
         case 'img-image-metadata-exif-viewer': {
           const exif = await imageEngine.readEXIF(file);
@@ -362,7 +365,7 @@ export const ImageWorkspace = ({ tool }) => {
             {processing && (
               <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
             )}
-            <span>{processing ? 'Processing In Browser...' : `Execute ${tool.name}`}</span>
+            <span>{processing ? (progressMsg || 'Processing In Browser...') : `Execute ${tool.name}`}</span>
           </button>
         </div>
       )}

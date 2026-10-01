@@ -25,7 +25,7 @@ export const MediaWorkspace = ({ tool }) => {
   const [mp3Title, setMp3Title] = useState('My Track');
   const [mp3Artist, setMp3Artist] = useState('Studio Producer');
   const [videoResolution, setVideoResolution] = useState('720p');
-  const [audioTargetFormat, setAudioTargetFormat] = useState('wav');
+  const [audioTargetFormat, setAudioTargetFormat] = useState('mp3');
   const [subtitles, setSubtitles] = useState([
     { start: '00:00:01,000', end: '00:00:04,000', text: 'Welcome to OmniDrive Tools.' },
     { start: '00:00:04,500', end: '00:00:08,000', text: '100% Client-Side Processing.' }
@@ -156,7 +156,7 @@ export const MediaWorkspace = ({ tool }) => {
           outputBlob = await ffmpegEngine.convertAudio(file, audioTargetFormat, setProgressMsg);
           break;
         case 'av-video-compressor':
-          outputBlob = await ffmpegEngine.resizeVideo(file, 640, 360, setProgressMsg, 800000);
+          outputBlob = await ffmpegEngine.compressVideo(file, 28, setProgressMsg);
           break;
         case 'av-video-resizer-dimensions': {
           const [w, h] = videoResolution === '1080p' ? [1920, 1080] : videoResolution === '1:1' ? [720, 720] : [1280, 720];
@@ -196,9 +196,12 @@ export const MediaWorkspace = ({ tool }) => {
     const t = resultBlob.type || '';
     let ext = tool.output;
     if (t.includes('webm')) ext = 'webm';
-    else if (t === 'video/mp4' || t === 'audio/mp4') ext = 'mp4';
+    else if (t === 'video/mp4') ext = 'mp4';
+    else if (t === 'audio/mp4') ext = 'm4a';
     else if (t === 'audio/wav') ext = 'wav';
     else if (t === 'audio/mpeg') ext = 'mp3';
+    else if (t === 'audio/ogg') ext = 'ogg';
+    else if (t === 'image/gif') ext = 'gif';
     a.download = `omnidrive-${tool.id}.${ext}`;
     document.body.appendChild(a);
     a.click();
@@ -361,9 +364,10 @@ export const MediaWorkspace = ({ tool }) => {
               onChange={(e) => setAudioTargetFormat(e.target.value)}
               className="w-full px-3.5 py-2 bg-white border border-[#E5E7EB] rounded-xl text-sm"
             >
-              <option value="wav">WAV (lossless, all browsers)</option>
-              <option value="webm">WebM / Opus (Chrome, Edge, Firefox)</option>
-              <option value="mp4">M4A / AAC (Safari, recent Chrome)</option>
+              <option value="mp3">MP3 (most compatible)</option>
+              <option value="wav">WAV (lossless)</option>
+              <option value="ogg">OGG / Opus</option>
+              <option value="m4a">M4A / AAC</option>
             </select>
           </div>
         )}
