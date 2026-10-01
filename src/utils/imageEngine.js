@@ -81,11 +81,29 @@ export const imageEngine = {
   },
 
   // Enlarge / Upscale Image (2x or 4x with bicubic/high-quality smoothing)
+  // Real AI upscaling: a genuine ESRGAN super-resolution model (running
+  // locally via TensorFlow.js), not a smoothed canvas resize — it can
+  // recover sharper edges and texture detail a simple resize cannot.
+  // Falls back to a high-quality canvas resize if the model can't load
+  // (e.g. WebGL unavailable) so the tool still works either way.
   async enlargeImage(file, factor = 2) {
     const img = await this.loadImage(file);
+    if (factor === 2) {
+      try {
+        const [{ default: Upscaler }] = await Promise.all([import('upscaler')]);
+        const upscaler = new Upscaler({
+          model: { path: '/models/upscale-x2/model.json', scale: 2, channels: 3 },
+        });
+        const dataUrl = await upscaler.upscale(img, { output: 'base64' });
+        const res = await fetch(dataUrl);
+        return await res.blob();
+      } catch (err) {
+        // Fall through to the canvas-resize fallback below
+      }
+    }
+
     const targetW = Math.round(img.width * factor);
     const targetH = Math.round(img.height * factor);
-
     const canvas = document.createElement('canvas');
     canvas.width = targetW;
     canvas.height = targetH;
@@ -160,10 +178,29 @@ export const imageEngine = {
     });
     return new Blob([svg], { type: 'image/svg+xml' });
   },
-  // Background removal by flood-filling inward from the image border.
-  // Works well on solid / uniform / lightly-graded backgrounds. It is NOT an
-  // AI segmentation model, so busy photographic backgrounds won't cut cleanly.
+  // Real AI background removal: a genuine deep-learning segmentation model
+  // (ISNet, via @imgly/background-removal + ONNX Runtime Web), the same
+  // class of model commercial background-removers use — it understands
+  // subject edges rather than just matching border colour, so it works on
+  // busy/photographic backgrounds too. The model itself is fetched from
+  // imgly's CDN on first use (~40MB, then cached by the browser), similar
+  // to how the OCR tool fetches its language data. If that fetch fails
+  // (e.g. no internet, or the CDN is blocked), this automatically falls
+  // back to the flood-fill method below so the tool still works.
   async removeBackground(file, tolerance = 40) {
+    try {
+      const { removeBackground: aiRemoveBackground } = await import('@imgly/background-removal');
+      return await aiRemoveBackground(file, { device: 'cpu' });
+    } catch (err) {
+      // Fall through to the local heuristic fallback below
+    }
+    return this.removeBackgroundFallback(file, tolerance);
+  },
+
+  // Fallback: flood-fills inward from the image border. Works well on
+  // solid/uniform/lightly-graded backgrounds; used automatically when the
+  // AI model above can't be loaded.
+  async removeBackgroundFallback(file, tolerance = 40) {
     const img = await this.loadImage(file);
     const canvas = document.createElement('canvas');
     const w = canvas.width = img.width;
@@ -441,97 +478,6 @@ export const imageEngine = {
   },
 
   // Picks a video container this browser can genuinely record
-  pickVideoMime() {
-    const candidates = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
-    if (typeof MediaRecorder === 'undefined') return null;
-    return candidates.find(m => MediaRecorder.isTypeSupported(m)) || null;
-  },
-
-  // GIF to video — decodes real GIF frames (with their delays) and records them
-  async gifToMp4(file) {
-    const mimeType = this.pickVideoMime();
-    if (!mimeType) throw new Error('This browser cannot record video (MediaRecorder unsupported). Try Chrome, Edge, or Firefox.');
-    const { parseGIF, decompressFrames } = await import('gifuct-js');
-    const gif = parseGIF(await file.arrayBuffer());
-    const frames = decompressFrames(gif, true);
-    if (!frames.length) throw new Error('No frames could be read from this GIF.');
-    const width = gif.lsd.width, height = gif.lsd.height;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    const patch = document.createElement('canvas');
-    const pctx = patch.getContext('2d');
-
-    const stream = canvas.captureStream(30);
-    const recorder = new MediaRecorder(stream, { mimeType });
-    const chunks = [];
-    recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-    const done = new Promise((resolve) => {
-      recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType.split(';')[0] }));
-    });
-
-    recorder.start();
-    for (const frame of frames) {
-      const { left, top, width: fw, height: fh } = frame.dims;
-      if (frame.disposalType === 2) ctx.clearRect(0, 0, width, height);
-      patch.width = fw;
-      patch.height = fh;
-      pctx.putImageData(new ImageData(new Uint8ClampedArray(frame.patch), fw, fh), 0, 0);
-      ctx.drawImage(patch, left, top);
-      await new Promise(r => setTimeout(r, Math.max(20, frame.delay || 40)));
-    }
-    await new Promise(r => setTimeout(r, 100));
-    recorder.stop();
-    return await done;
-  },
-
-  // Video to real animated GIF (frames sampled via seeking, encoded with gifenc)
-  async mp4ToGif(file, { fps = 10, maxSeconds = 10, maxWidth = 480 } = {}) {
-    const url = URL.createObjectURL(file);
-    try {
-      const video = document.createElement('video');
-      video.src = url;
-      video.muted = true;
-      video.playsInline = true;
-      await new Promise((resolve, reject) => {
-        video.onloadeddata = resolve;
-        video.onerror = () => reject(new Error('This video format could not be read by your browser.'));
-      });
-
-      const width = Math.min(maxWidth, video.videoWidth);
-      const height = Math.round((width * video.videoHeight) / video.videoWidth);
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-
-      const { GIFEncoder, quantize, applyPalette } = await import('gifenc');
-      const gif = GIFEncoder();
-      const duration = Math.min(video.duration || maxSeconds, maxSeconds);
-      const step = 1 / fps;
-      const delay = Math.round(1000 / fps);
-
-      for (let t = 0; t < duration; t += step) {
-        await new Promise((resolve) => {
-          video.onseeked = resolve;
-          video.currentTime = t;
-        });
-        ctx.drawImage(video, 0, 0, width, height);
-        const { data } = ctx.getImageData(0, 0, width, height);
-        const palette = quantize(data, 256);
-        const index = applyPalette(data, palette);
-        gif.writeFrame(index, width, height, { palette, delay });
-      }
-      gif.finish();
-      return new Blob([gif.bytes()], { type: 'image/gif' });
-    } finally {
-      URL.revokeObjectURL(url);
-    }
-  },
-
-  // Read EXIF Metadata — real parsing via exifr (camera, lens, exposure, GPS, dates...)
   async readEXIF(file) {
     const info = {
       FileName: file.name,
