@@ -3,3 +3,10 @@
   X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(self), microphone=(self)
+
+# Cross-origin isolation is required for the Background Remover's AI model
+# to run in multi-threaded WebAssembly. Scoped to just that page so the
+# rest of the site (ads, embeds, etc.) is unaffected.
+/image-tools/background-remover/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
