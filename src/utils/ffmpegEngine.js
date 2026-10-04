@@ -18,15 +18,23 @@ async function getFFmpeg(onProgress) {
   if (_ffmpegLoadPromise) return _ffmpegLoadPromise;
   _ffmpegLoadPromise = (async () => {
     const { FFmpeg } = await import('@ffmpeg/ffmpeg');
+    const { toBlobURL } = await import('@ffmpeg/util');
     const ffmpeg = new FFmpeg();
     if (onProgress) {
       ffmpeg.on('log', ({ message }) => onProgress(message));
       ffmpeg.on('progress', ({ progress }) => onProgress(`Processing: ${Math.round(progress * 100)}%`));
     }
     const base = window.location.origin;
+    // ffmpeg-core.wasm is ~31MB — too large for some git hosting file-size
+    // limits to keep in the repo, so it's loaded from jsdelivr (the CDN
+    // ffmpeg.wasm's own docs recommend) and converted to a blob URL, which
+    // is the standard, documented way to load it. Only the small worker
+    // glue (a few KB) is self-hosted, so processing still runs 100%
+    // locally in the browser once these are fetched.
+    const CORE_CDN = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
     await ffmpeg.load({
-      coreURL: `${base}/wasm/ffmpeg-core.js`,
-      wasmURL: `${base}/wasm/ffmpeg-core.wasm`,
+      coreURL: await toBlobURL(`${CORE_CDN}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${CORE_CDN}/ffmpeg-core.wasm`, 'application/wasm'),
       classWorkerURL: `${base}/wasm/ffmpeg-support/worker.js`,
     });
     _ffmpegInstance = ffmpeg;
